@@ -27,6 +27,10 @@ inputs:
     type: File
   - id: store
     type: boolean?
+  - id: memory
+    type: int
+  - id: cpus
+    type: int
 
 arguments: 
   - valueFrom: $(inputs.docker_script.path)
@@ -44,6 +48,10 @@ arguments:
     prefix: -c
   - valueFrom: $(inputs.input_dir)
     prefix: -i
+  - valueFrom: $(inputs.memory)
+    prefix: --memory
+  - valueFrom: $(inputs.cpus)
+    prefix: --cpus
 
 requirements:
   - class: InitialWorkDirRequirement
