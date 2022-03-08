@@ -78,9 +78,6 @@ def untar(directory, tar_filename):
 
 def main(syn, args):
     """Run docker model"""
-    if args.status == "INVALID":
-        raise Exception("Docker image is invalid")
-
     # The new toil version doesn't seem to pull the docker config file from
     # .docker/config.json...
     # client = docker.from_env()
@@ -129,16 +126,24 @@ def main(syn, args):
                 cont.remove()
             else:
                 container = cont
+    # This is how you calculate the N number of CPUs to use
+    cpu_period = 100000
+    cpu_quota = args.cpus * cpu_period
     # If the container doesn't exist, make sure to run the docker image
     if container is None:
         # Run as detached, logs will stream below
         print("running container")
         try:
-            container = client.containers.run(docker_image,
-                                              detach=True, volumes=volumes,
-                                              name=args.submissionid,
-                                              network_disabled=True,
-                                              mem_limit='6g', stderr=True)
+            container = client.containers.run(
+                docker_image,
+                "--input /data --output /output",
+                detach=True, volumes=volumes,
+                name=args.submissionid,
+                network_disabled=True,
+                mem_limit=f'{args.memory}g', stderr=True,
+                cpu_period=cpu_period,
+                cpu_quota=cpu_quota,
+            )
         except docker.errors.APIError as err:
             remove_docker_container(args.submissionid)
             errors = str(err) + "\n"
@@ -203,7 +208,14 @@ if __name__ == '__main__':
                         help="to store logs")
     parser.add_argument("--parentid", required=True,
                         help="Parent Id of submitter directory")
-    parser.add_argument("--status", required=True, help="Docker image status")
+    parser.add_argument(
+        "--memory", type=int, default=4,
+        help="Max amount of memory (gb) used by Docker container."
+    )
+    parser.add_argument(
+        "--cpus", type=int, default=1,
+        help="Max number of CPUs that can be used by Docker container."
+    )
     args = parser.parse_args()
     syn = synapseclient.Synapse(configPath=args.synapse_config)
     syn.login()

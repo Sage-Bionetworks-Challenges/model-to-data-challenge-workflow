@@ -19,8 +19,6 @@ inputs:
     type: string
   - id: parentid
     type: string
-  - id: status
-    type: string
   - id: synapse_config
     type: File
   - id: input_dir
@@ -29,6 +27,10 @@ inputs:
     type: File
   - id: store
     type: boolean?
+  - id: memory
+    type: int
+  - id: cpus
+    type: int
 
 arguments: 
   - valueFrom: $(inputs.docker_script.path)
@@ -40,14 +42,16 @@ arguments:
     prefix: -d
   - valueFrom: $(inputs.store)
     prefix: --store
-  - valueFrom: $(inputs.status)
-    prefix: --status
   - valueFrom: $(inputs.parentid)
     prefix: --parentid
   - valueFrom: $(inputs.synapse_config.path)
     prefix: -c
   - valueFrom: $(inputs.input_dir)
     prefix: -i
+  - valueFrom: $(inputs.memory)
+    prefix: --memory
+  - valueFrom: $(inputs.cpus)
+    prefix: --cpus
 
 requirements:
   - class: InitialWorkDirRequirement
