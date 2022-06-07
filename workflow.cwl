@@ -1,33 +1,34 @@
 #!/usr/bin/env cwl-runner
-#
-# Workflow for SC1
-# Inputs:
-#   submissionId: Submission ID to run this workflow on
-#   adminUploadSynId: Synapse ID of Folder accessible by admin user/team
-#   submitterUploadSynId: Synapse ID of Folder accessible by submitter
-#   workflowSynapseId: Synapse ID of File that links to workflow archive
-#   synapseConfig: filepath to .synapseConfig file
 
 cwlVersion: v1.0
 class: Workflow
+label: <YOUR CHALLENGE> Evaluation
+doc: >
+  BRIEF DESCRIPTION ABOUT THE CHALLENGE, e.g.
+  This workflow will run and evaluate Docker submissions to the
+  Awesome Challenge (syn123). Metrics returned are x, y, z.
 
 requirements:
   - class: StepInputExpressionRequirement
 
 inputs:
-  - id: submissionId
+  adminUploadSynId:
+    label: Synapse Folder ID accessible by an admin
+    type: string
+  submissionId:
+    label: Submission ID
     type: int
-  - id: adminUploadSynId
+  submitterUploadSynId:
+    label: Synapse Folder ID accessible by the submitter
     type: string
-  - id: submitterUploadSynId
-    type: string
-  - id: workflowSynapseId
-    type: string
-  - id: synapseConfig
+  synapseConfig:
+    label: filepath to .synapseConfig file
     type: File
+  workflowSynapseId:
+    label: Synapse File ID that links to the workflow
+    type: string
 
-# No output; everything is uploaded to Synapse.
-outputs: []
+outputs: {}
 
 steps:
 
@@ -149,7 +150,7 @@ steps:
     out: [finished]
 
   run_docker:
-    run: run_docker.cwl
+    run: steps/run_docker.cwl
     in:
       - id: docker_repository
         source: "#get_docker_submission/docker_repository"
@@ -216,7 +217,7 @@ steps:
     out: [finished]
 
   validate:
-    run: validate.cwl
+    run: steps/validate.cwl
     in:
       - id: input_file
         source: "#run_docker/predictions"
@@ -272,7 +273,7 @@ steps:
     out: [finished]
 
   score:
-    run: score.cwl
+    run: steps/score.cwl
     in:
       - id: input_file
         source: "#run_docker/predictions"
