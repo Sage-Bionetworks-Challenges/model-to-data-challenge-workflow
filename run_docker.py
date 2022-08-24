@@ -50,7 +50,6 @@ def store_log_file(syn, log_filename, parentid, store=True):
             log_tail = get_last_lines(log_filename)
             create_log_file(log_filename, log_tail)
         ent = synapseclient.File(log_filename, parent=parentid)
-
         if store:
             try:
                 syn.store(ent)
@@ -117,7 +116,7 @@ def main(syn, args):
     client.login(username=authen['username'],
                  password=authen['password'],
                  registry="https://docker.synapse.org")
-    # dockercfg_path=".docker/config.json")
+                 # dockercfg_path=".docker/config.json")
 
     print(getpass.getuser())
 
