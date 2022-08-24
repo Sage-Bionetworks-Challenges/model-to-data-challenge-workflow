@@ -27,11 +27,15 @@ def get_last_lines(log_filename, n=5):
     with open(log_filename, "rb") as f:
         try:
             f.seek(-2, os.SEEK_END)
+            # Keep reading, starting at the end, until n lines is read.
             while lines < n:
                 f.seek(-2, os.SEEK_CUR)
                 if f.read(1) == b"\n":
                     lines += 1
         except OSError:
+            # If file only contains one line, then only read that one
+            # line.  This exception will probably never occur, but
+            # adding it in, just in case.
             f.seek(0)
         last_lines = f.read().decode()
     return last_lines
@@ -113,7 +117,7 @@ def main(syn, args):
     client.login(username=authen['username'],
                  password=authen['password'],
                  registry="https://docker.synapse.org")
-                 # dockercfg_path=".docker/config.json")
+    # dockercfg_path=".docker/config.json")
 
     print(getpass.getuser())
 
