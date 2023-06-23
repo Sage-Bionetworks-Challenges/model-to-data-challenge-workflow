@@ -2,7 +2,7 @@
 
 cwlVersion: v1.0
 class: Workflow
-label: <YOUR CHALLENGE> Evaluation
+label: <YOUR CHALLENGE> Evaluation # Challenge labels should never use ":" to avoid an error
 doc: >
   BRIEF DESCRIPTION ABOUT THE CHALLENGE, e.g.
   This workflow will run and evaluate Docker submissions to the
