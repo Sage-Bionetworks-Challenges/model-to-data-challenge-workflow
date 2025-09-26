@@ -1,55 +1,58 @@
 #!/usr/bin/env cwl-runner
 cwlVersion: v1.0
 class: CommandLineTool
-label: Validate a Project (writeup) submission
+doc: Validate a Project (writeup) submission
+
+requirements:
+- class: InlineJavascriptRequirement
+
+inputs:
+- id: submissionid
+  type: int
+- id: challengewiki
+  type: string
+- id: public
+  type: boolean?
+  inputBinding:
+    prefix: --public
+- id: admin
+  type: string?
+  inputBinding:
+    prefix: --admin
+- id: synapse_config
+  type: File
+- id: output_file
+  type: string?
+  default: results.json
+  inputBinding:
+    prefix: --output
+
+outputs:
+- id: results
+  type: File
+  outputBinding:
+    glob: $(inputs.output_file)
+- id: status
+  type: string
+  outputBinding:
+    glob: results.json
+    outputEval: $(JSON.parse(self[0].contents)['submission_status'])
+    loadContents: true
+- id: invalid_reasons
+  type: string
+  outputBinding:
+    glob: results.json
+    outputEval: $(JSON.parse(self[0].contents)['submission_errors'])
+    loadContents: true
+
+baseCommand: challengeutils
+arguments:
+- -c
+- $(inputs.synapse_config.path)
+- validate-project
+- $(inputs.submissionid)
+- $(inputs.challengewiki)
 
 hints:
   DockerRequirement:
     dockerPull: sagebionetworks/challengeutils:v4.0.1
-
-requirements:
-  - class: InlineJavascriptRequirement
-
-inputs:
-  - id: submissionid
-    type: int
-  - id: challengewiki
-    type: string
-  - id: public
-    type: boolean?
-  - id: admin
-    type: string?
-  - id: synapse_config
-    type: File
-
-outputs:
-  - id: results
-    type: File
-    outputBinding:
-      glob: results.json
-  - id: status
-    type: string
-    outputBinding:
-      glob: results.json
-      loadContents: true
-      outputEval: $(JSON.parse(self[0].contents)['submission_status'])
-  - id: invalid_reasons
-    type: string
-    outputBinding:
-      glob: results.json
-      loadContents: true
-      outputEval: $(JSON.parse(self[0].contents)['submission_errors'])
-
-baseCommand: challengeutils
-arguments:
-  - valueFrom: $(inputs.synapse_config.path)
-    prefix: -c
-  - valueFrom: validate-project
-  - valueFrom: $(inputs.submissionid)
-  - valueFrom: $(inputs.challengewiki)
-  - valueFrom: $(inputs.public)
-    prefix: --public
-  - valueFrom: $(inputs.admin)
-    prefix: --admin
-  - valueFrom: results.json
-    prefix: --output
