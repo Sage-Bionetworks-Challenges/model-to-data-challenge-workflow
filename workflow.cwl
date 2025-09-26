@@ -1,20 +1,26 @@
 #!/usr/bin/env cwl-runner
-cwlVersion: v1.0
+cwlVersion: v1.2
 class: Workflow
-label: SEA-AD DREAM Challenge evaluation workflow
+label: Evaluation workflow for Docker submissions
+doc: >
+  This workflow runs a Docker submission against an input dataset,
+  validates the generated predictions file, and scores the predictions.
 
 requirements:
   - class: StepInputExpressionRequirement
 
 inputs:
+  # ------------------------------------------------------------------------------
+  # SynapseWorkflowOrchestrator inputs - do not remove or modify.
+  # ------------------------------------------------------------------------------
   adminUploadSynId:
-    label: Folder synID accessible by an admin
+    label: synID to folder that is downloadable by admin only
     type: string
   submissionId:
     label: Submission ID
     type: int
   submitterUploadSynId:
-    label: Folder synID accessible by the submitter
+    label: synID to folder that is downloadable by submitter and admin
     type: string
   synapseConfig:
     label: Filepath to the .synapseConfig file
@@ -22,18 +28,26 @@ inputs:
   workflowSynapseId:
     label: File synID that links to the workflow
     type: string
-  organizers:
-    label: User or team ID for challenge organizers
+
+  # ------------------------------------------------------------------------------
+  # Core challenge configuration - MUST be updated and specific to your challenge.
+  # ------------------------------------------------------------------------------
+  organizersId:
+    label: User or Team ID on Synapse for challenge organizers
     type: string
-    default: "123"
+    default: "3379097" # Placeholder - MUST be updated
   groundtruthSynId:
     label: File synID for the groundtruth file
     type: string
-    default: "syn123"
+    default: "syn123"  # Placeholder - MUST be updated
   inputDir:
     label: Absolute filepath to the input data directory
     type: string
-    default: "/home/ec2-user/validation_data"
+    default: "/home/user/input_data"  # Placeholder - MUST be updated
+
+  # ------------------------------------------------------------------------------
+  # Optional challenge configuration.
+  # ------------------------------------------------------------------------------
   errors_only:
     label: Send email notifications only for errors (no notification for valid submissions)
     type: boolean
@@ -55,7 +69,7 @@ steps:
       - id: entityid
         source: "#submitterUploadSynId"
       - id: principalid
-        source: "#organizers"
+        source: "#organizersId"
       - id: permissions
         valueFrom: "download"
       - id: synapse_config
@@ -71,7 +85,7 @@ steps:
       - id: entityid
         source: "#adminUploadSynId"
       - id: principalid
-        source: "#organizers"
+        source: "#organizersId"
       - id: permissions
         valueFrom: "download"
       - id: synapse_config
