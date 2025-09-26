@@ -5,14 +5,25 @@ label: Score predictions
 
 requirements:
 - class: InlineJavascriptRequirement
+- class: InitialWorkDirRequirement
+  listing:
+  - entryname: score.py
+    entry:
+      $include: ../evaluation/score.py
 
 inputs:
-- id: input_file
+- id: pred_file
   type: File
-- id: groundtruth
+  inputBinding:
+    prefix: -p
+- id: groundtruth_file
   type: File
+  inputBinding:
+    prefix: -g
 - id: task_number
-  type: string
+  type: string?
+  inputBinding:
+    prefix: -t
 - id: check_validation_finished
   type: boolean?
 
@@ -28,17 +39,13 @@ outputs:
     outputEval: $(JSON.parse(self[0].contents)['submission_status'])
     loadContents: true
 
-baseCommand: score.py
+baseCommand:
+- python3
+- score.py
 arguments:
-- prefix: -p
-  valueFrom: $(inputs.input_file.path)
-- prefix: -g
-  valueFrom: $(inputs.groundtruth.path)
-- prefix: -t
-  valueFrom: $(inputs.task_number)
 - prefix: -o
   valueFrom: results.json
 
 hints:
   DockerRequirement:
-    dockerPull: ghcr.io/sage-bionetworks-challenges/sea-ad-dream:latest
+    dockerPull: sagebionetworks/synapsepythonclient:v3.1.1  # TODO: update image as needed.
