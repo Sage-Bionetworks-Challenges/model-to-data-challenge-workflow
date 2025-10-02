@@ -1,46 +1,62 @@
 """Run participant Docker model and store logs."""
+
 from __future__ import print_function
 
 import argparse
 import glob
 import json
 import os
-import requests
 import tempfile
 
 import docker
+import requests
 import synapseclient
 
 
-def create_log_file(log_filename, log_text=None):
+def get_docker_client_and_login(
+    synapse_config_path: str,
+) -> docker.DockerClient:
+    """
+    Initializes the Docker client and log into the Synapse Docker Registry.
+    """
+    try:
+        client = docker.DockerClient(base_url="unix://var/run/docker.sock")
+        config = synapseclient.Synapse().getConfigFile(configPath=synapse_config_path)
+        authen = dict(config.items("authentication"))
+        client.login(
+            username=authen["username"],
+            password=authen["authtoken"],
+            registry="https://docker.synapse.org",
+        )
+    except docker.errors.APIError:
+        client = docker.from_env()
+    return client
+
+
+def create_log_file(log_filename: str, log_text: str | bytes | None = None):
     """Create log file"""
     with open(log_filename, "w") as log_file:
-        if log_text is not None:
-            if isinstance(log_text, bytes):
-                log_text = log_text.decode("utf-8")
-            log_file.write(log_text.encode("ascii", "ignore").decode("ascii"))
-        else:
-            log_file.write("Docker container did not produce any STDOUT or logs.")
+        if isinstance(log_text, bytes):
+            log_text = log_text.decode("utf-8")
+        log_file.write(log_text.encode("ascii", "ignore").decode("ascii"))
 
 
-def get_last_lines(log_filename, n=5):
-    """Get last N lines of log file (default=5)."""
-    lines = 0
+def get_log_tail(log_filename: str, n: int = 5) -> str:
+    """Reads the last N lines of a log file."""
     with open(log_filename, "rb") as f:
         try:
             f.seek(-2, os.SEEK_END)
+
             # Keep reading, starting at the end, until n lines is read.
-            while lines < n:
+            lines_read = 0
+            while lines_read < n:
                 f.seek(-2, os.SEEK_CUR)
                 if f.read(1) == b"\n":
-                    lines += 1
+                    lines_read += 1
         except OSError:
-            # If file only contains one line, then only read that one
-            # line.  This exception will probably never occur, but
-            # adding it in, just in case.
+            # If file only contains one line, only read that one line.
             f.seek(0)
-        last_lines = f.read().decode()
-    return last_lines
+        return f.read().decode()
 
 
 def store_log_file(syn, log_filename, parentid, store=True):
@@ -49,7 +65,7 @@ def store_log_file(syn, log_filename, parentid, store=True):
     if statinfo.st_size > 0:
         # If log file is larger than 50Kb, only save last few lines.
         if statinfo.st_size / 1000.0 > 50:
-            log_tail = get_last_lines(log_filename)
+            log_tail = get_log_tail(log_filename)
             create_log_file(log_filename, log_tail)
         ent = synapseclient.File(log_filename, parent=parentid)
         if store:
@@ -69,6 +85,16 @@ def remove_docker_container(client, container_name):
         print(f"Unable to remove container: {container_name}")
 
 
+def pull_docker_image(client, image_name):
+    """Pull docker image"""
+    try:
+        client.images.pull(image_name)
+    except docker.errors.ImageNotFound:
+        print(f"Image incompatible with the `linux/amd64 architecture; pl")
+    except Exception:
+        print(f"Unable to pull image: {image_name}")
+
+
 def remove_docker_image(client, image_name):
     """Remove docker image"""
     try:
@@ -77,15 +103,17 @@ def remove_docker_image(client, image_name):
         print(f"Unable to remove image: {image_name}")
 
 
-def run_docker(syn, args, docker_client, output_dir_to_mount, timeout=10800):
-    """Run Docker model.
+def run_docker(syn, args, docker_client, output_dir_to_mount):
+    """Run the participant's Docker model.
 
-    If model exceeds timeout (default 3 hours), stop the container.
+    The container execution is subject to a time limit. This timeout ensures
+    the system prevents resource exhaustion and keeps the evaluation queue moving.
     """
     docker_image = f"{args.docker_repository}@{args.docker_digest}"
     container_name = f"{args.submissionid}-docker_run"
     log_filename = f"{args.submissionid}-docker_logs.txt"
     input_dir = args.input_dir
+    timeout = args.container_time_limit
 
     print("Mounting volumes...")
     volumes = {
@@ -117,14 +145,14 @@ def run_docker(syn, args, docker_client, output_dir_to_mount, timeout=10800):
             volumes=volumes,
             name=container_name,
             network_disabled=True,
-            mem_limit="60g",
+            mem_limit=args.container_memory_limit,
             shm_size="1g",
             stderr=True,
         )
 
         # Wait for the container to finish
         container.wait(timeout=timeout)
-        log_text = container.logs()
+        log_text = container.logs() or "Container did not produce any STDOUT or logs."
         create_log_file(log_filename, log_text=log_text)
         store_log_file(syn, log_filename, args.parentid, store=args.store)
         container.remove()
@@ -147,43 +175,47 @@ def run_docker(syn, args, docker_client, output_dir_to_mount, timeout=10800):
         return False, log_text
 
 
-def main(syn, args):
+def main(args):
     """Main function."""
 
     status = "VALIDATED_DOCKER"
     invalid_reasons = ""
+    expected_output = "predictions.csv"
+
+    # Initial check for valid Docker image submission; skip to end if invalid.
     if not args.docker_repository and not args.docker_digest:
         status = "INVALID"
         invalid_reasons = "Submission is not a Docker image, please try again."
     else:
-        # The new toil version doesn't seem to pull the docker config file from
-        # .docker/config.json.
-        config = synapseclient.Synapse().getConfigFile(configPath=args.synapse_config)
-        authen = dict(config.items("authentication"))
-        client = docker.DockerClient(base_url="unix://var/run/docker.sock")
-        client.login(
-            username=authen["username"],
-            password=authen["authtoken"],
-            registry="https://docker.synapse.org",
-        )
+        # Login to Synapse.
+        syn = synapseclient.Synapse(configPath=args.synapse_config)
+        syn.login(silent=True)
 
-        with tempfile.TemporaryDirectory(dir=os.getcwd()) as output_dir:
+        # Login to the Synapse docker registry.
+        client = get_docker_client_and_login(args.synapse_config)
+
+        # Create temporary output directory to mount to container
+        current_working_dir = os.getcwd()
+        with tempfile.TemporaryDirectory(dir=current_working_dir) as output_dir:
+
             # Update permissions so that non-root container can write to it
-            new_permissions = 0o777
-            os.chmod(output_dir, new_permissions)
+            os.chmod(output_dir, 0o777)
 
             success, run_error = run_docker(syn, args, client, output_dir)
             if not success:
                 status = "INVALID"
                 invalid_reasons = run_error
             else:
-                output_file = glob.glob(os.path.join(output_dir, "predictions.csv"))
+                output_file = glob.glob(os.path.join(output_dir, expected_output))
                 if output_file:
-                    os.rename(output_file[0], os.path.join(os.getcwd(), "predictions.csv"))
+                    os.rename(
+                        output_file[0],
+                        os.path.join(current_working_dir, expected_output),
+                    )
                 else:
                     status = "INVALID"
                     invalid_reasons = (
-                        "Container did not generate a file called predictions.csv"
+                        f"Container did not generate a file called {expected_output}"
                     )
         remove_docker_image(client, f"{args.docker_repository}@{args.docker_digest}")
 
@@ -201,21 +233,63 @@ def main(syn, args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-s", "--submissionid", required=True, help="Submission Id")
     parser.add_argument(
-        "-p", "--docker_repository", required=True, help="Docker Repository"
+        "-c",
+        "--synapse_config",
+        required=True,
+        help="Filepath to Synapse credentials file",
     )
-    parser.add_argument("-d", "--docker_digest", required=True, help="Docker Digest")
-    parser.add_argument("-i", "--input_dir", required=True, help="Input Directory")
     parser.add_argument(
-        "-c", "--synapse_config", required=True, help="credentials file"
+        "-s",
+        "--submissionid",
+        required=True,
+        help="Submission ID",
     )
-    parser.add_argument("--store", action="store_true", help="to store logs")
     parser.add_argument(
-        "--parentid", required=True, help="Parent Id of submitter directory"
+        "--parentid",
+        required=True,
+        help="Parent Synapse ID (Folder) for storing logs",
+    )
+    parser.add_argument(
+        "--docker_repository",
+        required=True,
+        help="Docker image name",
+    )
+    parser.add_argument(
+        "--docker_digest",
+        required=True,
+        help="Docker digest",
+    )
+    parser.add_argument(
+        "-i",
+        "--input_dir",
+        required=True,
+        help="Absolute path to the input data directory",
+    )
+    parser.add_argument(
+        "--container_time_limit",
+        type=int,
+        default=7200,
+        help="Container execution timeout in seconds (default: 7200s / 2h)",
+    )
+    parser.add_argument(
+        "--container_memory_limit",
+        default="2g",
+        help="Container memory limit (default: 2g). Must be at least 6m (6 megabytes)",
+    )
+    parser.add_argument(
+        "--container_memory_swap_limit",
+        default="2g",
+        help=(
+            "Amount of memory container is allowed to swap to disk (default: 2g). "
+            "If this value is less than or equal to 'container_memory_limit', "
+            "container will not have access to swap."
+        ),
+    )
+    parser.add_argument(
+        "--store",
+        action="store_true",
+        help="Store container logs in Synapse",
     )
     args = parser.parse_args()
-
-    syn = synapseclient.Synapse(configPath=args.synapse_config)
-    syn.login(silent=True)
-    main(syn, args)
+    main(args)

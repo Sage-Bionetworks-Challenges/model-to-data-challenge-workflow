@@ -1,3 +1,4 @@
-# Model-to-Data Workflow
+# Model-to-Data Workflow Template
 
-_Undergoing review and updates_
+This repository provides a ready-to-use template for setting up a
+model2data workflow to be used with a challenge hosted on Synapse.

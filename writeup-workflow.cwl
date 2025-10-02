@@ -1,49 +1,72 @@
 #!/usr/bin/env cwl-runner
 cwlVersion: v1.0
 class: Workflow
-label: Validate and archive writeup submission
+label: Evaluation workflow for project submissions
+doc: > 
+  This workflow validates and archives a writeup submission for a
+  challenge. The writeup is expected to be a Synapse project and
+  should be accessible to at least the Challenge onrganizers team.
 
 requirements:
   - class: StepInputExpressionRequirement
 
 inputs:
+  # ------------------------------------------------------------------------------
+  # SynapseWorkflowOrchestrator inputs - do not remove or modify.
+  # ------------------------------------------------------------------------------
   adminUploadSynId:
-    label: Synapse Folder ID accessible by an admin
+    label: synID to folder that is downloadable by admin only
     type: string
   submissionId:
     label: Submission ID
     type: int
   submitterUploadSynId:
-    label: Synapse Folder ID accessible by the submitter
+    label: synID to folder that is downloadable by submitter and admin
     type: string
   synapseConfig:
-    label: filepath to .synapseConfig file
+    label: Filepath to the .synapseConfig file
     type: File
   workflowSynapseId:
-    label: Synapse File ID that links to the workflow
+    label: File synID that links to the workflow
     type: string
-  organizers:
-    label: User or team ID for challenge organizers
+
+  # ------------------------------------------------------------------------------
+  # Core challenge configuration - MUST be updated and specific to your challenge.
+  # ------------------------------------------------------------------------------
+  challengeProjectId:
+    label: synID for the challenge project
     type: string
-    default: "123"
+    default: "syn123"  # Placeholder - MUST be updated
+  organizersId:
+    label: User or Team ID on Synapse for challenge organizers
+    type: string
+    default: "3379097" # Placeholder - MUST be updated
+
+  # ------------------------------------------------------------------------------
+  # Optional challenge configuration.
+  # ------------------------------------------------------------------------------
+  errors_only:
+    label: Send email notifications only for errors (no notification for valid submissions)
+    type: boolean
+    default: false
 
 outputs: []
 
 steps:
   01_validate:
     doc: Check that submission is a valid Synapse project
-    run: writeup-workflow/steps/validate-writeup.cwl
+    run: steps/validate-writeup.cwl
     in:
       - id: synapse_config
         source: "#synapseConfig"
       - id: submissionid
         source: "#submissionId"
       - id: challengewiki
-        valueFrom: "syn64743570"
+        source: "#challengeProjectId"
       - id: public
         default: true
       - id: admin
-        source: "#organizers"
+        source: "#organizersId"
     out:
       - id: results
       - id: status
@@ -64,8 +87,8 @@ steps:
         source: "#01_validate/status"
       - id: invalid_reasons
         source: "#01_validate/invalid_reasons"
-      # - id: errors_only
-      #   default: true
+      - id: errors_only
+        source: "#errors_only"
     out: [finished]
 
   03_annotate_validation_with_output:
@@ -88,6 +111,9 @@ steps:
     out: [finished]
 
   04_check_status:
+    doc: >
+      Check the status of the submission validation; if 'INVALID', throw an
+      exception to stop the workflow at this step
     run: |-
       https://raw.githubusercontent.com/Sage-Bionetworks/ChallengeWorkflowTemplates/v4.1/cwl/check_status.cwl
     in:
@@ -101,15 +127,15 @@ steps:
  
   05_archive:
     doc: Create a copy of the Synapse project for archival purposes
-    run: writeup-workflow/steps/archive.cwl
+    run: steps/archive-writeup.cwl
     in:
       - id: synapse_config
         source: "#synapseConfig"
       - id: submissionid
         source: "#submissionId"
       - id: admin
-        source: "#organizers"
-      - id: check_validation_finished 
+        source: "#organizersId"
+      - id: check_validation_finished
         source: "#04_check_status/finished"
     out:
       - id: results
