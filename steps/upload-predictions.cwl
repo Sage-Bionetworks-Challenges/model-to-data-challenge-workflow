@@ -43,9 +43,10 @@ outputs:
   outputBinding:
     glob: results.json
 
-baseCommand: python3
+baseCommand:
+- python3
+- upload_file.py
 arguments:
-- valueFrom: upload_file.py
 - prefix: -f
   valueFrom: $(inputs.infile)
 - prefix: -p

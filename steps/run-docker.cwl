@@ -26,6 +26,18 @@ inputs:
   type: string
 - id: docker_script
   type: File
+- id: memory_limit
+  type: string?
+  inputBinding:
+    prefix: --container_memory_limit
+- id: swap_limit
+  type: string?
+  inputBinding:
+    prefix: --container_memory_swap_limit
+- id: time_limit
+  type: int?
+  inputBinding:
+    prefix: --container_time_limit
 - id: store
   type: boolean?
 
@@ -51,14 +63,14 @@ outputs:
     outputEval: $(JSON.parse(self[0].contents)['submission_errors'])
     loadContents: true
 
-baseCommand: python
+baseCommand: python3
 arguments:
 - valueFrom: $(inputs.docker_script.path)
 - prefix: -s
   valueFrom: $(inputs.submissionid)
-- prefix: -p
+- prefix: --docker_repository
   valueFrom: $(inputs.docker_repository)
-- prefix: -d
+- prefix: --docker_digest
   valueFrom: $(inputs.docker_digest)
 - prefix: --store
   valueFrom: $(inputs.store)
@@ -68,3 +80,7 @@ arguments:
   valueFrom: $(inputs.synapse_config.path)
 - prefix: -i
   valueFrom: $(inputs.input_dir)
+- prefix: -m
+  valueFrom: $(inputs.memory_limit)
+- prefix: -t
+  valueFrom: $(inputs.time_limit)
