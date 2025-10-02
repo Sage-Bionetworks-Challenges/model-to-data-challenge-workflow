@@ -122,20 +122,10 @@ steps:
     out:
       - id: filepath
 
-  01_create_docker_config:
-    doc: Create a Docker client configuration file using Synapse credentials
-    run: steps/create_docker_config.cwl
-    in:
-      - id: synapse_config
-        source: "#synapseConfig"
-    out: 
-      - id: docker_registry
-      - id: docker_authentication
-
   02_run_docker:
     doc: >
       Run the participant Docker container against the input data to generate predictions
-    run: steps/run_docker.cwl
+    run: steps/run-docker.cwl
     in:
       - id: docker_repository
         source: "#01_download_submission/docker_repository"
@@ -143,12 +133,8 @@ steps:
         source: "#01_download_submission/docker_digest"
       - id: submissionid
         source: "#submissionId"
-      - id: docker_registry
-        source: "#01_create_docker_config/docker_registry"
-      - id: docker_authentication
-        source: "#01_create_docker_config/docker_authentication"
       - id: parentid
-        source: "#adminUploadSynId"
+        source: "#adminUploadSynId"  # Can be updated to: 'submitterUploadSynId' if participants can have access to logs
       - id: synapse_config
         source: "#synapseConfig"
       - id: store
