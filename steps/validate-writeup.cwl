@@ -22,10 +22,7 @@ inputs:
 - id: synapse_config
   type: File
 - id: output_file
-  type: string?
-  default: results.json
-  inputBinding:
-    prefix: --output
+  type: string
 
 outputs:
 - id: results
@@ -47,11 +44,12 @@ outputs:
 
 baseCommand: challengeutils
 arguments:
-- -c
-- $(inputs.synapse_config.path)
-- validate-project
-- $(inputs.submissionid)
-- $(inputs.challengewiki)
+- prefix: -c
+  valueFrom: $(inputs.synapse_config.path)
+- valueFrom: validate-project
+- valueFrom: $(inputs.submissionid)
+- prefix: -o
+  valueFrom: results.json
 
 hints:
   DockerRequirement:

@@ -113,7 +113,7 @@ steps:
   04_check_status:
     doc: >
       Check the status of the submission validation; if 'INVALID', throw an
-      exception to stop the workflow
+      exception to stop the workflow at this step
     run: |-
       https://raw.githubusercontent.com/Sage-Bionetworks/ChallengeWorkflowTemplates/v4.1/cwl/check_status.cwl
     in:
@@ -127,7 +127,7 @@ steps:
  
   05_archive:
     doc: Create a copy of the Synapse project for archival purposes
-    run: steps/archive.cwl
+    run: steps/archive-writeup.cwl
     in:
       - id: synapse_config
         source: "#synapseConfig"

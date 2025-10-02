@@ -14,40 +14,52 @@ inputs:
   # SynapseWorkflowOrchestrator inputs - do not remove or modify.
   # ------------------------------------------------------------------------------
   adminUploadSynId:
-    label: synID to folder that is downloadable by admin only
+    label: synID to folder on Synapse that is downloadable by admin only
     type: string
   submissionId:
     label: Submission ID
     type: int
   submitterUploadSynId:
-    label: synID to folder that is downloadable by submitter and admin
+    label: synID to folder on Synapse that is downloadable by submitter and admin
     type: string
   synapseConfig:
-    label: Filepath to the .synapseConfig file
+    label: Abstolute filepath to .synapseConfig file
     type: File
   workflowSynapseId:
-    label: File synID that links to the workflow
+    label: synID to workflow file
     type: string
 
   # ------------------------------------------------------------------------------
   # Core challenge configuration - MUST be updated and specific to your challenge.
   # ------------------------------------------------------------------------------
   organizersId:
-    label: User or Team ID on Synapse for challenge organizers
+    label: userID or teamID for the organizers team on Synapse
     type: string
     default: "3379097" # Placeholder - MUST be updated
   groundtruthSynId:
-    label: File synID for the groundtruth file
+    label: synID for the groundtruth file on Synapse
     type: string
     default: "syn123"  # Placeholder - MUST be updated
   inputDir:
-    label: Absolute filepath to the input data directory
+    label: Absolute filepath to the input data directory on the host machine
     type: string
     default: "/home/user/input_data"  # Placeholder - MUST be updated
 
   # ------------------------------------------------------------------------------
   # Optional challenge configuration.
   # ------------------------------------------------------------------------------
+  container_memory_limit:
+    label: Memory limit for running the container (e.g. '4g' or '200m')
+    type: string
+    default: "6g"
+  container_swap_limit:
+    label: Swap limit for running the container (e.g. '4g' or '200m'). See https://docs.docker.com/engine/containers/resource_constraints/ for more details.
+    type: string
+    default: "6g"
+  container_time_limit:
+    label: Time limit (in seconds) for running the container
+    type: int
+    default: 10800  # 3 hours
   errors_only:
     label: Send email notifications only for errors (no notification for valid submissions)
     type: boolean
@@ -55,14 +67,14 @@ inputs:
   private_annotations:
     label: Annotations to be withheld from participants
     type: string[]
-    default: []
+    default: ["admin_folder"]
 
 outputs: []
 
 steps:
   01_set_submitter_folder_permissions:
     doc: >
-      Give challenge organizers `download` permissions to the docker logs
+      Give challenge organizers `download` access to the docker logs
     run: |-
       https://raw.githubusercontent.com/Sage-Bionetworks/ChallengeWorkflowTemplates/v4.1/cwl/set_permissions.cwl
     in:
@@ -78,7 +90,7 @@ steps:
 
   01_set_admin_folder_permissions:
     doc: >
-      Give challenge organizers `download` permissions to the private submission folder
+      Give challenge organizers `download` access to the private submission folder
     run: |-
       https://raw.githubusercontent.com/Sage-Bionetworks/ChallengeWorkflowTemplates/v4.1/cwl/set_permissions.cwl
     in:
@@ -141,10 +153,16 @@ steps:
         default: true
       - id: input_dir
         source: "#inputDir"
+      - id: memory_limit
+        source: "#container_memory_limit"
+      - id: swap_limit
+        source: "#container_swap_limit"
+      - id: time_limit
+        source: "#container_time_limit"
       - id: docker_script
         default:
           class: File
-          location: "steps/run_docker.py"
+          location: "scripts/run_docker_model.py"
     out:
       - id: predictions
       - id: results
@@ -189,7 +207,9 @@ steps:
   04_check_docker_run_status:
     doc: >
       Check the status of the container run; if 'INVALID', throw an
-      exception to stop the workflow
+      exception to stop the workflow at this step. That way, the
+      workflow will not attempt to evaluate a non-existent predictions
+      file.
     run: |-
       https://raw.githubusercontent.com/Sage-Bionetworks/ChallengeWorkflowTemplates/v4.1/cwl/check_status.cwl
     in:
@@ -203,7 +223,7 @@ steps:
 
   05_upload_generated_predictions:
     doc: Upload the generated predictions file to the private folder
-    run: steps/upload_predictions.cwl
+    run: steps/upload-predictions.cwl
     in:
       - id: infile
         source: "#02_run_docker/predictions"
@@ -243,12 +263,12 @@ steps:
     out: [finished]
 
   07_validate:
-    doc: Validate format of generated predictions, prior to scoring
+    doc: Validate format of generated predictions file, prior to scoring
     run: steps/validate.cwl
     in:
-      - id: input_file
+      - id: pred_file
         source: "#02_run_docker/predictions"
-      - id: groundtruth
+      - id: groundtruth_file
         source: "#01_download_groundtruth/filepath"
       - id: previous_annotation_finished
         source: "#06_annotate_docker_upload_results/finished"
@@ -296,8 +316,8 @@ steps:
   09_check_validation_status:
     doc: >
       Check the validation status of the submission; if 'INVALID', throw an
-      exception to stop the workflow - this will prevent the attempt of
-      scoring invalid predictions file (which will then result in errors)
+      exception to stop the workflow at this step. That way, the workflow
+      will not attempt scoring invalid predictions file.
     run: |-
       https://raw.githubusercontent.com/Sage-Bionetworks/ChallengeWorkflowTemplates/v4.1/cwl/check_status.cwl
     in:
@@ -312,9 +332,9 @@ steps:
   10_score:
     run: steps/score.cwl
     in:
-      - id: input_file
+      - id: pred_file
         source: "#02_run_docker/predictions"
-      - id: groundtruth
+      - id: groundtruth_file
         source: "#01_download_groundtruth/filepath"
       - id: task_number
         source: "#01_download_submission/evaluation_id"

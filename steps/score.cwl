@@ -48,4 +48,4 @@ arguments:
 
 hints:
   DockerRequirement:
-    dockerPull: sagebionetworks/synapsepythonclient:v3.1.1  # TODO: update image as needed.
+    dockerPull: sagebionetworks/synapsepythonclient:v3.1.1   # TODO: update image as needed; see evaluation/README.md for more details.
