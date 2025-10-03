@@ -67,7 +67,7 @@ inputs:
   private_annotations:
     label: Annotations to be withheld from participants
     type: string[]
-    default: ["admin_folder", "submission_errors"]
+    default: ["submission_errors"]
 
 outputs: []
 
