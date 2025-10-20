@@ -46,7 +46,7 @@ inputs:
     default: "/home/user/input_data"  # Placeholder - MUST be updated
 
   # ------------------------------------------------------------------------------
-  # Optional challenge configuration.
+  # Optional challenge configuration - update as needed.
   # ------------------------------------------------------------------------------
   container_memory_limit:
     label: Memory limit for running the container (e.g. '4g' or '200m')
