@@ -21,14 +21,12 @@ inputs:
     prefix: --admin
 - id: synapse_config
   type: File
-- id: output_file
-  type: string
 
 outputs:
 - id: results
   type: File
   outputBinding:
-    glob: $(inputs.output_file)
+    glob: results.json
 - id: status
   type: string
   outputBinding:
@@ -48,7 +46,8 @@ arguments:
   valueFrom: $(inputs.synapse_config.path)
 - valueFrom: validate-project
 - valueFrom: $(inputs.submissionid)
-- prefix: -o
+- valueFrom: $(inputs.challengewiki)
+- prefix: --output
   valueFrom: results.json
 
 hints:
