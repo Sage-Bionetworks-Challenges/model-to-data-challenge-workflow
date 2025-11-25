@@ -12,7 +12,7 @@
 
   <img 
     alt="GitHub release (latest by date)" 
-    src="https://img.shields.io/github/release/sage-bionetworks-challenges/model-to-data-challenge-workflow?label=latest%20release&display_name=release&style=flat-square">
+    src="https://img.shields.io/github/release/sage-bionetworks-challenges/model-to-data-challenge-workflow?label=latest%20release&display_name=release&style=flat-square&color=blue">
   <img 
     alt="GitHub Release Date" 
     src="https://img.shields.io/github/release-date/sage-bionetworks-challenges/model-to-data-challenge-workflow?style=flat-square&color=green">
