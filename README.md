@@ -60,10 +60,11 @@ This template provides all necessary components for a full challenge pipeline:
 
 #### Resource docs 
 
-This workflow uses CWL, Docker, and the SynapseWorkflowOrchestrator to run
-the challenge pipeline. For more information on how to utilize these tools,
-see their docs below:
+This template is built using CWL and Docker, and is designed to be handled by the
+SynapseWorkflowOrchestrator orchestration tool. For detailed information on utilizing
+these core technologies, please refer to their docs below:
 
 * CWL: https://www.commonwl.org/user_guide/
 * Docker: https://docs.docker.com/get-started/
 * SynapseWorkflowOrchestrator: https://github.com/Sage-Bionetworks/SynapseWorkflowOrchestrator
+
