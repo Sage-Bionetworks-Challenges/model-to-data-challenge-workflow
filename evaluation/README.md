@@ -6,4 +6,4 @@ Once your changes are ready, create a new release in your repo. This will trigge
 the action to build and deploy this Docker image into your repo as a package.
 
 Final steps would be to copy the image name into your "validate.cwl" and "score.cwl"
-under hints.DockerRequirement.dockerPull.
+under `hints.DockerRequirement.dockerPull`.
