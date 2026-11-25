@@ -12,6 +12,9 @@ import docker
 import requests
 import synapseclient
 
+NONROOT_UID = 1000
+NONROOT_GID = 1000
+
 
 def get_docker_client_and_login(
     synapse_config_path: str,
@@ -185,6 +188,9 @@ def main(args):
 
         # Create temporary output directory to mount to container
         current_working_dir = os.getcwd()
+        with tempfile.TemporaryDirectory(dir=current_working_dir, ignore_cleanup_errors=True) as output_dir:
+            os.chown(output_dir, NONROOT_UID, NONROOT_GID)
+
             run_error = run_docker(syn, args, client, output_dir)
             if run_error:
                 status = "INVALID"
