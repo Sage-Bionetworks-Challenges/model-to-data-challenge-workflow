@@ -100,6 +100,8 @@ def run_docker(syn, args, docker_client, output_dir_to_mount):
 
     The container execution is subject to a time limit. This timeout ensures
     the system prevents resource exhaustion and keeps the evaluation queue moving.
+
+    Returns an empty string on success, or an error message describing the failure.
     """
     docker_image = f"{args.docker_repository}@{args.docker_digest}"
     container_name = f"{args.submissionid}-docker_run"
@@ -126,20 +128,16 @@ def run_docker(syn, args, docker_client, output_dir_to_mount):
     try:
         docker_client.images.pull(docker_image)
     except docker.errors.APIError as err:
-        errors = f"Unable to pull image: {err}"
-        return False, errors
+        return f"Unable to pull image: {err}"
 
     print(f"Running container '{container_name}'...")
+    container = None
     try:
         container = docker_client.containers.run(
             docker_image,
             detach=True,
-            volumes=volumes,
             name=container_name,
-            network_disabled=True,
-            mem_limit=args.container_memory_limit,
-            shm_size="1g",
-            stderr=True,
+            **build_container_kwargs(args, volumes),
         )
 
         # Wait for the container to finish
@@ -147,9 +145,9 @@ def run_docker(syn, args, docker_client, output_dir_to_mount):
         log_text = container.logs() or "Container did not produce any STDOUT or logs."
         create_log_file(log_filename, log_text=log_text)
         store_log_file(syn, log_filename, args.parentid, store=args.store)
-        container.remove()
-        return True, ""
-    except requests.exceptions.ConnectionError:
+        remove_docker_container(docker_client, container_name)
+        return ""
+    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
         log_text = (
             f"Container exceeded execution time limit of {timeout / 60} "
             "minutes; stopping container."
@@ -157,14 +155,13 @@ def run_docker(syn, args, docker_client, output_dir_to_mount):
         remove_docker_container(docker_client, container_name)
         create_log_file(log_filename, log_text=log_text)
         store_log_file(syn, log_filename, args.parentid, store=args.store)
-        container.remove()
-        return False, log_text
+        return log_text
     except Exception as err:
         log_text = f"Error running container: {err}"
         create_log_file(log_filename, log_text=log_text)
         store_log_file(syn, log_filename, args.parentid, store=args.store)
-        container.remove()
-        return False, log_text
+        remove_docker_container(docker_client, container_name)
+        return log_text
 
 
 def main(args):
@@ -188,13 +185,8 @@ def main(args):
 
         # Create temporary output directory to mount to container
         current_working_dir = os.getcwd()
-        with tempfile.TemporaryDirectory(dir=current_working_dir) as output_dir:
-
-            # Update permissions so that non-root container can write to it
-            os.chmod(output_dir, 0o777)
-
-            success, run_error = run_docker(syn, args, client, output_dir)
-            if not success:
+            run_error = run_docker(syn, args, client, output_dir)
+            if run_error:
                 status = "INVALID"
                 invalid_reasons = run_error
             else:
