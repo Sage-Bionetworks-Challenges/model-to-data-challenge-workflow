@@ -79,20 +79,12 @@ def remove_docker_container(client, container_name):
     """Remove docker container"""
     try:
         cont = client.containers.get(container_name)
-        cont.stop()
-        cont.remove()
-    except Exception:
-        print(f"Unable to remove container: {container_name}")
-
-
-def pull_docker_image(client, image_name):
-    """Pull docker image"""
-    try:
-        client.images.pull(image_name)
-    except docker.errors.ImageNotFound:
-        print(f"Image incompatible with the `linux/amd64 architecture; pl")
-    except Exception:
-        print(f"Unable to pull image: {image_name}")
+        cont.remove(force=True)
+    except docker.errors.NotFound:
+        # Container doesn't exist (e.g. already removed); nothing to do.
+        return
+    except Exception as err:
+        print(f"Unable to remove container '{container_name}': {err}")
 
 
 def remove_docker_image(client, image_name):
