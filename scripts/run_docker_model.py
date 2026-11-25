@@ -98,6 +98,22 @@ def remove_docker_image(client, image_name):
         print(f"Unable to remove image: {image_name}")
 
 
+def build_container_kwargs(args, volumes):
+    """Build the kwargs passed to docker_client.containers.run() for a submission."""
+    return {
+        "user": f"{NONROOT_UID}:{NONROOT_GID}",  # To run container as non-root (fixed non-root userid)
+        "environment": {"HOME": "/tmp"},  # For containers that require a writable HOME directory
+        "network_disabled": True,
+        "volumes": volumes,
+        "mem_limit": args.container_memory_limit,
+        "memswap_limit": args.container_memory_swap_limit or args.container_memory_limit,
+        "shm_size": args.container_shm_size,
+        "nano_cpus": int(args.container_cpu * 1e9),
+        "pids_limit": int(min(max(args.container_cpu * 256, 1024), 16384)),
+        "stderr": True,
+    }
+
+
 def run_docker(syn, args, docker_client, output_dir_to_mount):
     """Run the participant's Docker model.
 
