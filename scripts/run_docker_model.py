@@ -40,11 +40,11 @@ def create_log_file(log_filename: str, log_text: str | bytes | None = None):
     """Create log file"""
     with open(log_filename, "w") as log_file:
         if isinstance(log_text, bytes):
-            log_text = log_text.decode("utf-8")
-        log_file.write(log_text.encode("ascii", "ignore").decode("ascii"))
+            log_text = log_text.decode("utf-8", errors="replace")
+        log_file.write((log_text or "").encode("ascii", "ignore").decode("ascii"))
 
 
-def get_log_tail(log_filename: str, n: int = 5) -> str:
+def get_log_tail(log_filename: str, n: int = 10) -> str:
     """Reads the last N lines of a log file."""
     with open(log_filename, "rb") as f:
         try:
