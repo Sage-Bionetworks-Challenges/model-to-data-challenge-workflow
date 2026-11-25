@@ -1,7 +1,5 @@
 """Run participant Docker model and store logs."""
 
-from __future__ import print_function
-
 import argparse
 import glob
 import json
@@ -86,8 +84,8 @@ def remove_docker_container(client, container_name):
     except docker.errors.NotFound:
         # Container doesn't exist (e.g. already removed); nothing to do.
         return
-    except Exception as err:
-        print(f"Unable to remove container '{container_name}': {err}")
+    except Exception:
+        print(f"Unable to remove container: '{container_name}'")
 
 
 def remove_docker_image(client, image_name):
@@ -150,7 +148,6 @@ def run_docker(syn, args, docker_client, output_dir_to_mount):
         return f"Unable to pull image: {err}"
 
     print(f"Running container '{container_name}'...")
-    container = None
     try:
         container = docker_client.containers.run(
             docker_image,
