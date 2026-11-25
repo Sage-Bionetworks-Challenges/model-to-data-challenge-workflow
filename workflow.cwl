@@ -49,13 +49,21 @@ inputs:
   # Optional challenge configuration - update as needed.
   # ------------------------------------------------------------------------------
   container_memory_limit:
-    label: Memory limit for running the container (e.g. '4g' or '200m')
+    label: Memory limit allocated to the container (e.g. '4g' or '200m')
     type: string
-    default: "6g"
+    default: "2g"
   container_swap_limit:
-    label: Swap limit for running the container (e.g. '4g' or '200m'). See https://docs.docker.com/engine/containers/resource_constraints/ for more details.
+    label: Swap limit allocated to the container (e.g. '4g' or '200m'). See https://docs.docker.com/engine/containers/resource_constraints/ for more details.
+    type: string?
+    # default: "3g"  # Uncomment if you want to allow swap.
+  container_shm_size:
+    label: Shared memory size allocated to the container (e.g. '4g' or '200m')
     type: string
-    default: "6g"
+    default: "256m"
+  container_cpu:
+    label: Number of CPUs allocated to the container (e.g. 1.0, 0.5)
+    type: float
+    default: 2.0
   container_time_limit:
     label: Time limit (in seconds) for running the container
     type: int
@@ -65,7 +73,7 @@ inputs:
     type: boolean
     default: true
   private_annotations:
-    label: Annotations to be withheld from participants
+    label: Annotations to be withheld from participants in their 'success' email
     type: string[]
     default: ["submission_errors"]
 
@@ -159,6 +167,10 @@ steps:
         source: "#container_swap_limit"
       - id: time_limit
         source: "#container_time_limit"
+      - id: cpu
+        source: "#container_cpu"
+      - id: shm_size
+        source: "#container_shm_size"
       - id: docker_script
         default:
           class: File

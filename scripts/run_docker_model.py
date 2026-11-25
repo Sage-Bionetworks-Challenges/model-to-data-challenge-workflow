@@ -1,7 +1,5 @@
 """Run participant Docker model and store logs."""
 
-from __future__ import print_function
-
 import argparse
 import glob
 import json
@@ -11,6 +9,9 @@ import tempfile
 import docker
 import requests
 import synapseclient
+
+NONROOT_UID = 1000
+NONROOT_GID = 1000
 
 
 def get_docker_client_and_login(
@@ -37,11 +38,11 @@ def create_log_file(log_filename: str, log_text: str | bytes | None = None):
     """Create log file"""
     with open(log_filename, "w") as log_file:
         if isinstance(log_text, bytes):
-            log_text = log_text.decode("utf-8")
-        log_file.write(log_text.encode("ascii", "ignore").decode("ascii"))
+            log_text = log_text.decode("utf-8", errors="replace")
+        log_file.write((log_text or "").encode("ascii", "ignore").decode("ascii"))
 
 
-def get_log_tail(log_filename: str, n: int = 5) -> str:
+def get_log_tail(log_filename: str, n: int = 10) -> str:
     """Reads the last N lines of a log file."""
     with open(log_filename, "rb") as f:
         try:
@@ -79,20 +80,12 @@ def remove_docker_container(client, container_name):
     """Remove docker container"""
     try:
         cont = client.containers.get(container_name)
-        cont.stop()
-        cont.remove()
+        cont.remove(force=True)
+    except docker.errors.NotFound:
+        # Container doesn't exist (e.g. already removed); nothing to do.
+        return
     except Exception:
-        print(f"Unable to remove container: {container_name}")
-
-
-def pull_docker_image(client, image_name):
-    """Pull docker image"""
-    try:
-        client.images.pull(image_name)
-    except docker.errors.ImageNotFound:
-        print(f"Image incompatible with the `linux/amd64 architecture; pl")
-    except Exception:
-        print(f"Unable to pull image: {image_name}")
+        print(f"Unable to remove container: '{container_name}'")
 
 
 def remove_docker_image(client, image_name):
@@ -103,11 +96,29 @@ def remove_docker_image(client, image_name):
         print(f"Unable to remove image: {image_name}")
 
 
+def build_container_kwargs(args, volumes):
+    """Build the kwargs passed to docker_client.containers.run() for a submission."""
+    return {
+        "user": f"{NONROOT_UID}:{NONROOT_GID}",  # To run container as non-root (fixed non-root userid)
+        "environment": {"HOME": "/tmp"},  # For containers that require a writable HOME directory
+        "network_disabled": True,
+        "volumes": volumes,
+        "mem_limit": args.container_memory_limit,
+        "memswap_limit": args.container_memory_swap_limit or args.container_memory_limit,
+        "shm_size": args.container_shm_size,
+        "nano_cpus": int(args.container_cpu * 1e9),
+        "pids_limit": int(min(max(args.container_cpu * 256, 1024), 16384)),
+        "stderr": True,
+    }
+
+
 def run_docker(syn, args, docker_client, output_dir_to_mount):
     """Run the participant's Docker model.
 
     The container execution is subject to a time limit. This timeout ensures
     the system prevents resource exhaustion and keeps the evaluation queue moving.
+
+    Returns an empty string on success, or an error message describing the failure.
     """
     docker_image = f"{args.docker_repository}@{args.docker_digest}"
     container_name = f"{args.submissionid}-docker_run"
@@ -134,20 +145,15 @@ def run_docker(syn, args, docker_client, output_dir_to_mount):
     try:
         docker_client.images.pull(docker_image)
     except docker.errors.APIError as err:
-        errors = f"Unable to pull image: {err}"
-        return False, errors
+        return f"Unable to pull image: {err}"
 
     print(f"Running container '{container_name}'...")
     try:
         container = docker_client.containers.run(
             docker_image,
             detach=True,
-            volumes=volumes,
             name=container_name,
-            network_disabled=True,
-            mem_limit=args.container_memory_limit,
-            shm_size="1g",
-            stderr=True,
+            **build_container_kwargs(args, volumes),
         )
 
         # Wait for the container to finish
@@ -155,9 +161,9 @@ def run_docker(syn, args, docker_client, output_dir_to_mount):
         log_text = container.logs() or "Container did not produce any STDOUT or logs."
         create_log_file(log_filename, log_text=log_text)
         store_log_file(syn, log_filename, args.parentid, store=args.store)
-        container.remove()
-        return True, ""
-    except requests.exceptions.ConnectionError:
+        remove_docker_container(docker_client, container_name)
+        return ""
+    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
         log_text = (
             f"Container exceeded execution time limit of {timeout / 60} "
             "minutes; stopping container."
@@ -165,14 +171,13 @@ def run_docker(syn, args, docker_client, output_dir_to_mount):
         remove_docker_container(docker_client, container_name)
         create_log_file(log_filename, log_text=log_text)
         store_log_file(syn, log_filename, args.parentid, store=args.store)
-        container.remove()
-        return False, log_text
+        return log_text
     except Exception as err:
         log_text = f"Error running container: {err}"
         create_log_file(log_filename, log_text=log_text)
         store_log_file(syn, log_filename, args.parentid, store=args.store)
-        container.remove()
-        return False, log_text
+        remove_docker_container(docker_client, container_name)
+        return log_text
 
 
 def main(args):
@@ -196,13 +201,11 @@ def main(args):
 
         # Create temporary output directory to mount to container
         current_working_dir = os.getcwd()
-        with tempfile.TemporaryDirectory(dir=current_working_dir) as output_dir:
+        with tempfile.TemporaryDirectory(dir=current_working_dir, ignore_cleanup_errors=True) as output_dir:
+            os.chown(output_dir, NONROOT_UID, NONROOT_GID)
 
-            # Update permissions so that non-root container can write to it
-            os.chmod(output_dir, 0o777)
-
-            success, run_error = run_docker(syn, args, client, output_dir)
-            if not success:
+            run_error = run_docker(syn, args, client, output_dir)
+            if run_error:
                 status = "INVALID"
                 invalid_reasons = run_error
             else:
@@ -273,18 +276,28 @@ if __name__ == "__main__":
         help="Container execution timeout in seconds (default: 7200s / 2h)",
     )
     parser.add_argument(
+        "--container_cpu",
+        type=float,
+        default=2.0,
+        help="Number of CPUs allocated to the container (default: 2.0)",
+    )
+    parser.add_argument(
         "--container_memory_limit",
         default="2g",
         help="Container memory limit (default: 2g). Must be at least 6m (6 megabytes)",
     )
     parser.add_argument(
         "--container_memory_swap_limit",
-        default="2g",
+        default=None,
         help=(
-            "Amount of memory container is allowed to swap to disk (default: 2g). "
-            "If this value is less than or equal to 'container_memory_limit', "
-            "container will not have access to swap."
+            "Total memory + swap limit (default: None, which will set swap to the same"
+            "value as --container_memory_limit which disables swap)"
         ),
+    )
+    parser.add_argument(
+        "--container_shm_size",
+        default="256m",
+        help="Shared memory (/dev/shm) size for the container (default: 256m)",
     )
     parser.add_argument(
         "--store",
