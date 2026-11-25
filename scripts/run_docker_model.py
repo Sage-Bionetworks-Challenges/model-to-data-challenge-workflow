@@ -273,18 +273,28 @@ if __name__ == "__main__":
         help="Container execution timeout in seconds (default: 7200s / 2h)",
     )
     parser.add_argument(
+        "--container_cpu",
+        type=float,
+        default=2.0,
+        help="Number of CPUs allocated to the container (default: 2.0)",
+    )
+    parser.add_argument(
         "--container_memory_limit",
         default="2g",
         help="Container memory limit (default: 2g). Must be at least 6m (6 megabytes)",
     )
     parser.add_argument(
         "--container_memory_swap_limit",
-        default="2g",
+        default=None,
         help=(
-            "Amount of memory container is allowed to swap to disk (default: 2g). "
-            "If this value is less than or equal to 'container_memory_limit', "
-            "container will not have access to swap."
+            "Total memory + swap limit (default: None, which will set swap to the same"
+            "value as --container_memory_limit which disables swap)"
         ),
+    )
+    parser.add_argument(
+        "--container_shm_size",
+        default="256m",
+        help="Shared memory (/dev/shm) size for the container (default: 256m)",
     )
     parser.add_argument(
         "--store",
